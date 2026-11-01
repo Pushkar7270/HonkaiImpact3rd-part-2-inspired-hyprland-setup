@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Regenerate the wallpaper thumbnails after adding/replacing images.
+# (The shell caches thumbnails by file URI, so replaced files keep a stale preview.)
+set -e
+DIR="${1:-$HOME/Pictures/Wallpapers}"
+SCRIPT="$HOME/.config/quickshell/end4-pC/scripts/thumbnails/generate-thumbnails-magick.sh"
+for size in x-large large; do
+    bash "$SCRIPT" --size "$size" -d "$DIR"
+done
+# drop stale entries for files that no longer exist
+python3 - "$DIR" <<'PY'
+import hashlib, os, sys
+d = os.path.expanduser(sys.argv[1])
+alive = set()
+for f in os.listdir(d):
+    p = os.path.join(d, f)
+    h = hashlib.md5(('file://' + p).encode()).hexdigest()
+    alive.add(h)
+removed = 0
+base = os.path.expanduser('~/.cache/thumbnails')
+for size in os.listdir(base):
+    sd = os.path.join(base, size)
+    if not os.path.isdir(sd):
+        continue
+    for f in os.listdir(sd):
+        if f.endswith('.png') and f[:-4] not in alive:
+            os.remove(os.path.join(sd, f))
+            removed += 1
+print(f"removed {removed} stale thumbnails")
+PY
+notify-send "Wallpapers refreshed" "Thumbnails regenerated" -a "Wallpapers"

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Release any keys that got stuck down (e.g. a virtual Shift left pressed by the
+# on-screen keyboard). Fixes the "everything is typed in CAPS" problem.
+set -u
+KEYS=""
+for i in $(seq 1 248); do
+    KEYS="$KEYS $i:0"
+done
+# shellcheck disable=SC2086
+ydotool key --key-delay 0 $KEYS >/dev/null 2>&1
+notify-send "Keys released" "Any stuck modifier keys were released" -a "Keyboard" 2>/dev/null || true
+echo "released all virtual keys"

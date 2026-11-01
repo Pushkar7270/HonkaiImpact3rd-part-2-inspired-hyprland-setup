@@ -1,0 +1,16 @@
+# Editor / OS junk
+*~
+*.swp
+*.swo
+.idea/
+.vscode/
+.DS_Store
+
+# Python cache from the helper scripts
+__pycache__/
+*.py[cod]
+.venv/
+
+# Generated / machine-specific files that install.sh creates
+docs/*.pdf
+*.log

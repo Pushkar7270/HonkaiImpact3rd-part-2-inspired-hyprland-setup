@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Set the end4-pC / desktop avatar from an image file.
+#   usage: set-avatar ~/Pictures/me.png
+set -e
+src="${1:-$HOME/Pictures/avatar.png}"
+[ -f "$src" ] || { echo "no such file: $src"; exit 1; }
+mkdir -p "$HOME/.config/quickshell/avatar"
+cp "$src" "$HOME/.config/quickshell/avatar/avatar.png"
+cp "$src" "$HOME/.face"
+cp "$src" "$HOME/.face.icon"
+python3 - <<'PY'
+import json, pathlib
+p = pathlib.Path.home() / '.config/illogical-impulse/config.json'
+d = json.loads(p.read_text())
+d.setdefault('profile', {})['avatarPath'] = str(pathlib.Path.home() / '.config/quickshell/avatar')
+d['profile']['avatarPicture'] = 'avatar.png'
+p.write_text(json.dumps(d, indent=4))
+PY
+notify-send "Avatar updated" "$src" -a "Profile" 2>/dev/null || true
+echo "avatar set from $src"
