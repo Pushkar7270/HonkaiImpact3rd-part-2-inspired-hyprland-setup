@@ -10,7 +10,9 @@ Hyprland 0.57 · Quickshell (end4-pC fork) · Matugen · Tokyo Night
 [![Arch](https://img.shields.io/badge/Arch%20%2F%20CachyOS-rolling-1793D1?style=flat-square)](https://cachyos.org)
 [![Theme](https://img.shields.io/badge/theme-Tokyo%20Night-1A1B26?style=flat-square)](#theming)
 
-<img src="wallpapers/9a7bf1442f19461c46b1d94b2d9dd7e2_1398637448496280117.png" alt="Desktop wallpaper" width="100%">
+<img src="docs/desktop.png" alt="The desktop as it runs: Hyprland 0.57 with the end4-pC Quickshell shell, Tokyo Night palette" width="100%">
+
+<sub>Hyprland 0.57 · end4-pC shell · Tokyo Night palette · 1920×1200 — bar, desktop widgets, floating dock</sub>
 
 </div>
 
@@ -278,6 +280,7 @@ The current theme is **Tokyo Night**, applied at
 ├── wallpapers/                  # 19 Honkai Impact 3rd wallpapers
 ├── avatar/                      # avatar.png + face.jpg
 ├── docs/
+│   ├── desktop.png                 # screenshot used at the top of this README
 │   ├── Hyprland-Setup-Guide.docx   # the 90+ page documentation book
 │   ├── end4-pC-Shortcuts.md        # every keybind
 │   └── end4-pC-local.patch         # local changes on top of the fork
