@@ -29,7 +29,7 @@ scripts, the wallpapers and the avatar. The only thing you need to bring is the
 base installation (packages and the upstream dots).
 
 > **Included:** 19 wallpapers, avatar, complete `~/.config/hypr`, shell
-> `config.json`, 3 helper scripts, the local end4-pC patch and a 90-page
+> `config.json`, 3 helper scripts, the local end4-pC patch and a 90+ page
 > documentation book (`docs/Hyprland-Setup-Guide.docx`).
 
 ---
@@ -278,7 +278,7 @@ The current theme is **Tokyo Night**, applied at
 ├── wallpapers/                  # 19 Honkai Impact 3rd wallpapers
 ├── avatar/                      # avatar.png + face.jpg
 ├── docs/
-│   ├── Hyprland-Setup-Guide.docx   # the 90-page documentation book
+│   ├── Hyprland-Setup-Guide.docx   # the 90+ page documentation book
 │   ├── end4-pC-Shortcuts.md        # every keybind
 │   └── end4-pC-local.patch         # local changes on top of the fork
 ├── install.sh
