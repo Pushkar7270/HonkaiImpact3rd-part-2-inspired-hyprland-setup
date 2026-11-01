@@ -1,0 +1,1 @@
+# HonkaiImpact3rd-part-2-inspired-hyprland-setup
