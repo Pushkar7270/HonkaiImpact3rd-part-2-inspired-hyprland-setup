@@ -10,11 +10,8 @@ Hyprland 0.57 · Quickshell (end4-pC fork) · Matugen · Tokyo Night
 [![Arch](https://img.shields.io/badge/Arch%20%2F%20CachyOS-rolling-1793D1?style=flat-square)](https://cachyos.org)
 [![Theme](https://img.shields.io/badge/theme-Tokyo%20Night-1A1B26?style=flat-square)](#theming)
 
-<div align="center">
-  <video src="wallpapers/goddess-dreamseeker-honkai-impact-3rd-moewalls-com.mp4" width="100%" autoplay loop muted playsinline controls>
-    Your browser does not support the video tag.
-  </video>
-</div>
+<img src="docs/desktop.png" alt="The desktop as it runs: Hyprland 0.57 with the end4-pC Quickshell shell, Tokyo Night palette" width="100%">
+
 <sub>Hyprland 0.57 · end4-pC shell · Tokyo Night palette · 1920×1200 — bar, desktop widgets, floating dock</sub>
 
 </div>
@@ -33,29 +30,41 @@ Everything is here: the Hyprland Lua config, the Quickshell shell config, helper
 scripts, the wallpapers and the avatar. The only thing you need to bring is the
 base installation (packages and the upstream dots).
 
-> **Included:** 19 wallpapers, avatar, complete `~/.config/hypr`, shell
-> `config.json`, 3 helper scripts, the local end4-pC patch and a 90+ page
-> documentation book (`docs/Hyprland-Setup-Guide.docx`).
+> **Included:** 19 wallpapers, 1 live 4K video wallpaper, avatar, complete
+> `~/.config/hypr`, shell `config.json`, 3 helper scripts, the local end4-pC
+> patch and a 90+ page documentation book
+> (`docs/Hyprland-Setup-Guide.docx`).
 
 ---
 
 ## 🖼️ Gallery
 
+### 🎞️ Current wallpaper — live 4K video
+
+<a href="wallpapers/goddess-dreamseeker-honkai-impact-3rd-moewalls-com.mp4">
+  <img src="docs/live-wallpaper.gif" alt="Live wallpaper — animated preview (click to play the 4K video)" width="100%">
+</a>
+
+<sub>Animated preview, 8 fps. GitHub does not play videos that live in a repository, so
+**click the preview** to open the real file: 3840×2160, 60 fps, 10 s loop,
+36 MB (`wallpapers/goddess-…-moewalls-com.mp4`).</sub>
+
 | | |
 |:---:|:---:|
 | <img src="wallpapers/9a7bf1442f19461c46b1d94b2d9dd7e2_1398637448496280117.png" width="420"> | <img src="wallpapers/fc2767a1d25b01116e7cb72932fabe44_2145641096946670015.jpg" width="420"> |
-| Current wallpaper | Lock screen wallpaper |
+| **Idle wallpaper** — the previous wallpaper | Lock screen wallpaper |
 | <img src="wallpapers/68f5abee69391c182f64bfdf207bb700_3299530302703659607.png" width="420"> | <img src="wallpapers/b8202414ebc2ff61bad13921667b5592_4702179676566974842.png" width="420"> |
 | Sidebar banner | Included wallpaper |
 | <img src="wallpapers/f22ce14d22c327f84130cb108d83047f_6056868951584389272.png" width="420"> | <img src="wallpapers/cbab17598cb20af49e77e8d0b3e6d42a_3897991262426332582.png" width="420"> |
+| Included wallpaper | Included wallpaper |
 
 <p align="center">
   <img src="avatar/avatar.png" width="140" alt="Avatar">
   <br><sub>Profile avatar (also installed as <code>~/.face</code>)</sub>
 </p>
 
-All wallpapers live in [`wallpapers/`](wallpapers). Game artwork © HoYoverse /
-miHoYo — included for personal, non-commercial use only.
+All wallpapers — including the video — live in [`wallpapers/`](wallpapers). Game
+artwork © HoYoverse / miHoYo — included for personal, non-commercial use only.
 
 ---
 
@@ -260,7 +269,13 @@ wallpaper ──► matugen ──► ~/.local/state/quickshell/user/generated/c
   `~/.config/illogical-impulse/schemes/`.
 - **Wallpaper-derived:** set `appearance.palette.type` to `auto` (or
   `scheme-content`, `scheme-expressive`, …) and switch wallpaper.
-- **Create a new theme:** the 40-page guide in
+- **Live video wallpaper:** the current wallpaper is
+  `wallpapers/goddess-…-moewalls-com.mp4` — a 3840×2160, 60 fps loop played by
+  the shell on its wallpaper layer (mpvpaper). Put a video in
+  `~/Pictures/Wallpapers` and pick it in the wallpaper selector like any image;
+  the still above it stays as the *Idle wallpaper* for the lock/idle screen and
+  as the Matugen source when the named scheme is cleared.
+- **Create a new theme:** the 90+ page guide in
   [`docs/Hyprland-Setup-Guide.docx`](docs/Hyprland-Setup-Guide.docx) has a
   step-by-step chapter (palette JSON format, matugen templates, Hyprland colours,
   lock screen, GTK/Qt/terminal, fonts and shapes).
@@ -280,10 +295,11 @@ The current theme is **Tokyo Night**, applied at
 │   │   └── config.json          # shell settings (bar, widgets, dock, theme…)
 │   └── fish/conf.d/             # PATH snippet for ~/bin + ~/.local/bin
 ├── local/bin/                   # refresh-wallpapers, set-avatar, unstick-keys
-├── wallpapers/                  # 19 Honkai Impact 3rd wallpapers
+├── wallpapers/                  # 19 wallpapers + 1 live 4K video
 ├── avatar/                      # avatar.png + face.jpg
 ├── docs/
 │   ├── desktop.png                 # screenshot used at the top of this README
+│   ├── live-wallpaper.gif          # animated preview of the video wallpaper
 │   ├── Hyprland-Setup-Guide.docx   # the 90+ page documentation book
 │   ├── end4-pC-Shortcuts.md        # every keybind
 │   └── end4-pC-local.patch         # local changes on top of the fork
