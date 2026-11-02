@@ -10,8 +10,11 @@ Hyprland 0.57 · Quickshell (end4-pC fork) · Matugen · Tokyo Night
 [![Arch](https://img.shields.io/badge/Arch%20%2F%20CachyOS-rolling-1793D1?style=flat-square)](https://cachyos.org)
 [![Theme](https://img.shields.io/badge/theme-Tokyo%20Night-1A1B26?style=flat-square)](#theming)
 
-<img src="docs/desktop.png" alt="The desktop as it runs: Hyprland 0.57 with the end4-pC Quickshell shell, Tokyo Night palette" width="100%">
-
+<div align="center">
+  <video src="wallpapers/goddess-dreamseeker-honkai-impact-3rd-moewalls-com.mp4" width="100%" autoplay loop muted playsinline controls>
+    Your browser does not support the video tag.
+  </video>
+</div>
 <sub>Hyprland 0.57 · end4-pC shell · Tokyo Night palette · 1920×1200 — bar, desktop widgets, floating dock</sub>
 
 </div>
