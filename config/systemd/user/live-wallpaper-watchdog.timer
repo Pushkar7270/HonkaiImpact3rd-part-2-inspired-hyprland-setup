@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep the video wallpaper alive (checks every 30 s)
+Documentation=file://%h/bin/ensure-live-wallpaper
+
+[Timer]
+OnStartupSec=30
+OnUnitActiveSec=30
+AccuracySec=5
+Unit=live-wallpaper-watchdog.service
+
+[Install]
+WantedBy=timers.target

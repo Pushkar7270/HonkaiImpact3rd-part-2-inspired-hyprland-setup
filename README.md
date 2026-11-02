@@ -66,6 +66,21 @@ base installation (packages and the upstream dots).
 All wallpapers — including the video — live in [`wallpapers/`](wallpapers). Game
 artwork © HoYoverse / miHoYo — included for personal, non-commercial use only.
 
+### How the live wallpaper stays alive
+
+The wallpaper switcher starts one **mpvpaper** process per monitor (with an IPC
+socket so the bar can pause/resume it) and writes
+`__restore_video_wallpaper.sh`, which Hyprland runs at login. If that process
+ever dies, the shell would silently show the still *Idle wallpaper* instead.
+This repo therefore ships `local/bin/ensure-live-wallpaper` plus a systemd user
+timer that checks every 30 s and restarts mpvpaper when needed:
+
+```bash
+systemctl --user status live-wallpaper-watchdog.timer   # is it armed?
+~/bin/ensure-live-wallpaper                            # ...if it is not
+~/.local/state/live-wallpaper.log                      # what did it do?
+```
+
 ---
 
 ## 🧩 The stack
@@ -160,13 +175,16 @@ The script will:
 2. copy `config/hypr` → `~/.config/hypr`,
 3. copy the shell `config.json` → `~/.config/illogical-impulse/config.json`,
 4. install `local/bin/*` → `~/bin` and the fish PATH snippet,
-5. copy all wallpapers → `~/Pictures/Wallpapers` and create the
+5. install and enable the **live-wallpaper watchdog**
+   (`live-wallpaper-watchdog.timer` — restarts `mpvpaper` within 30 s if the
+   video wallpaper ever dies),
+6. copy all wallpapers → `~/Pictures/Wallpapers` and create the
    `~/Wallpapers` symlink,
-6. install the avatar as `~/.config/quickshell/avatar/avatar.png` and `~/.face`,
-7. clone **end4-pC** to `~/.config/quickshell/end4-pC` and apply
+7. install the avatar as `~/.config/quickshell/avatar/avatar.png` and `~/.face`,
+8. clone **end4-pC** to `~/.config/quickshell/end4-pC` and apply
    `docs/end4-pC-local.patch` (the local widget/cheatsheet/on-screen-keyboard
    fixes),
-8. point `qsConfig` at `end4-pC` and restart the shell.
+9. point `qsConfig` at `end4-pC` and restart the shell.
 
 Then log out and back in once. That's it.
 
@@ -192,10 +210,16 @@ cp avatar/face.jpg ~/.face
 # 4. helpers
 cp local/bin/* ~/bin/ && chmod +x ~/bin/*
 
-# 5. select the shell
+# 5. live-wallpaper watchdog (systemd user units)
+mkdir -p ~/.config/systemd/user
+cp config/systemd/user/* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now live-wallpaper-watchdog.timer
+
+# 6. select the shell
 echo 'hl.env("qsConfig", "end4-pC")' > ~/.config/hypr/custom/variables.lua
 
-# 6. restart
+# 7. restart
 hyprctl reload && killall qs; qs -c end4-pC & disown
 ```
 
@@ -293,8 +317,10 @@ The current theme is **Tokyo Night**, applied at
 │   ├── hypr/                    # ~/.config/hypr (Lua config, rules, keybinds, lock)
 │   ├── illogical-impulse/
 │   │   └── config.json          # shell settings (bar, widgets, dock, theme…)
+│   ├── systemd/user/            # live-wallpaper-watchdog.service + .timer
 │   └── fish/conf.d/             # PATH snippet for ~/bin + ~/.local/bin
-├── local/bin/                   # refresh-wallpapers, set-avatar, unstick-keys
+├── local/bin/                   # refresh-wallpapers, set-avatar, unstick-keys,
+│                                # ensure-live-wallpaper (watchdog)
 ├── wallpapers/                  # 19 wallpapers + 1 live 4K video
 ├── avatar/                      # avatar.png + face.jpg
 ├── docs/
@@ -327,6 +353,10 @@ The current theme is **Tokyo Night**, applied at
 | `hyprctl configerrors` shows something | check the line number; most errors come from a value above a new Hyprland limit |
 | Shell does not start | `qs -c end4-pC` in a terminal and read the output; logs in `/run/user/$UID/quickshell/by-id/*/log.log` |
 | Wallpaper switch stalls | the `notify-send` upscale prompt — this repo already patches it |
+| Live wallpaper frozen or looking static | stock `switchwall.sh` runs `mpvpaper -a max`, which pauses the video as soon as **any** window is maximized. This repo's patch uses `-a full` (only a real fullscreen window pauses it). Re-apply: `~/bin/ensure-live-wallpaper` |
+| Live wallpaper vanished after a while | the watchdog restarts it within 30 s. Check `systemctl --user status live-wallpaper-watchdog.timer` and `~/.local/state/live-wallpaper.log` |
+| Wallpaper is back to the still image after a reboot | `hyprland/execs.lua` runs `__restore_video_wallpaper.sh` at login; if it is the placeholder, pick the video once in the wallpaper selector |
+| `pkill` killed my terminal while switching wallpapers | old script used `pkill -f mpvpaper`; the patched script uses `pkill -x mpvpaper` |
 | Stale wallpaper thumbnails | `~/bin/refresh-wallpapers` |
 | Everything types in CAPS | `Scroll_Lock` (releases stuck virtual modifiers) |
 | Blurry/oversized UI on a hybrid GPU | edit `config/hypr/custom/env.lua` (`AQ_DRM_DEVICES`, `NVD_BACKEND`) |

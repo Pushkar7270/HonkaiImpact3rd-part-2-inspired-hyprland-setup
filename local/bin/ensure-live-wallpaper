@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Keep the video wallpaper alive.
+#
+# switchwall.sh starts mpvpaper when a video is picked, but nothing restarts it
+# if the process dies later (a GPU reset, a failed re-apply, or a kill/start
+# race in the wallpaper switcher). When that happens the desktop silently falls
+# back to the still thumbnail until the next login.
+#
+# Run by live-wallpaper-watchdog.timer every 30 s:
+#   - read the current wallpaper from the shell config
+#   - still image  -> do nothing (switchwall.sh already killed mpvpaper)
+#   - video        -> if no mpvpaper answers on its IPC socket, start it again
+#
+# mpvpaper is started directly here instead of through the generated
+# __restore_video_wallpaper.sh: that script runs `pkill -f -9 mpvpaper`, which
+# also matches unrelated processes whose command line merely mentions
+# "mpvpaper" (editors, terminals, this watchdog's own caller).
+set -u
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/illogical-impulse/config.json"
+SOCKET_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+LOG="$STATE_DIR/live-wallpaper.log"
+
+mkdir -p "$STATE_DIR"
+
+log() {
+    printf '%s %s\n' "$(date '+%F %T')" "$*" >>"$LOG"
+}
+
+# The watchdog runs from a systemd user unit. Hyprland normally exports both of
+# these, but recover them from the runtime dir if the environment is missing.
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    for dir in "$SOCKET_DIR"/hypr/*/; do
+        [ -S "$dir/.socket.sock" ] || continue
+        export HYPRLAND_INSTANCE_SIGNATURE="$(basename "$dir")"
+        break
+    done
+fi
+
+[ -f "$CONFIG" ] || exit 0
+
+wallpaper=$(jq -r '.background.wallpaperPath // ""' "$CONFIG" 2>/dev/null)
+[ -n "$wallpaper" ] || exit 0
+
+case "${wallpaper##*.}" in
+    mp4|webm|mkv|avi|mov) ;;
+    *) exit 0 ;;                    # a still wallpaper: nothing to keep alive
+esac
+
+[ -f "$wallpaper" ] || exit 0
+
+# Already running and answering on its IPC socket? Then there is nothing to do.
+for socket in "$SOCKET_DIR"/mpvpaper-*.sock; do
+    [ -S "$socket" ] || continue
+    if printf '%s\n' '{"command":["get_property","pause"]}' \
+        | timeout 2 socat - UNIX-CONNECT:"$socket" 2>/dev/null \
+        | grep -q '"error":"success"'; then
+        exit 0
+    fi
+done
+
+# Dead process or dead sockets: clean up and start again.
+pkill -x mpvpaper 2>/dev/null
+sleep 0.3
+rm -f "$SOCKET_DIR"/mpvpaper-*.sock
+
+monitors=$(hyprctl monitors -j 2>/dev/null | jq -r '.[].name' 2>/dev/null)
+[ -n "$monitors" ] || { log "no monitors found, is Hyprland running?"; exit 0; }
+
+flags="-p -a full"
+opts="no-audio loop hwdec=auto scale=bilinear interpolation=no video-sync=display-resample panscan=1.0 video-scale-x=1.0 video-scale-y=1.0 video-align-x=0.5 video-align-y=0.5 load-scripts=no"
+
+for monitor in $monitors; do
+    if [ "${LIVE_WALLPAPER_DEBUG:-0}" = 1 ]; then
+        setsid -f mpvpaper $flags \
+            -o "$opts input-ipc-server=$SOCKET_DIR/mpvpaper-$monitor.sock" \
+            "$monitor" "$wallpaper" >>"$LOG" 2>&1
+    else
+        setsid -f mpvpaper $flags \
+            -o "$opts input-ipc-server=$SOCKET_DIR/mpvpaper-$monitor.sock" \
+            "$monitor" "$wallpaper" >/dev/null 2>&1
+    fi
+    sleep 0.2
+done
+
+log "started mpvpaper on $(echo "$monitors" | tr '\n' ' ')for $wallpaper"

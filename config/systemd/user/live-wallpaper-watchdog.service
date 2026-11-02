@@ -1,0 +1,13 @@
+[Unit]
+Description=Restart the video wallpaper if mpvpaper died
+Documentation=file://%h/bin/ensure-live-wallpaper
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+# The script launches mpvpaper with setsid and exits immediately. With the
+# default KillMode=control-group systemd would then kill the freshly started
+# mpvpaper together with the unit, so only kill the script itself.
+KillMode=process
+ExecStart=%h/bin/ensure-live-wallpaper

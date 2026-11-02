@@ -96,6 +96,17 @@ mkdir -p "$HOME/bin"
 cp "$REPO_DIR"/local/bin/* "$HOME/bin/"
 chmod +x "$HOME/bin/"*
 
+echo "==> systemd user units (live wallpaper watchdog)"
+mkdir -p "$HOME/.config/systemd/user"
+cp "$REPO_DIR"/config/systemd/user/* "$HOME/.config/systemd/user/"
+if systemctl --user daemon-reload >/dev/null 2>&1; then
+    systemctl --user enable --now live-wallpaper-watchdog.timer >/dev/null 2>&1 || true
+    echo "  live-wallpaper-watchdog.timer enabled (checks every 30 s)"
+else
+    echo "  systemctl --user is not available in this session."
+    echo "  After logging in, run: systemctl --user enable --now live-wallpaper-watchdog.timer"
+fi
+
 # --- 3. wallpapers + avatar -------------------------------------------------
 echo "==> Wallpapers (~/Pictures/Wallpapers)"
 mkdir -p "$HOME/Pictures/Wallpapers"
