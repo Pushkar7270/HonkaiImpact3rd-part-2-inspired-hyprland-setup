@@ -118,8 +118,10 @@ lives in `~/.config/quickshell/end4-pC` and its settings in
 
 - **Arch Linux or an Arch derivative** (tested on CachyOS). Debian/Fedora are
   not supported by the upstream installer.
-- A Wayland-capable GPU. This setup was tuned on a **hybrid Intel + NVIDIA
-  RTX 4050** laptop (the internal panel is driven by the Intel GPU).
+- A Wayland-capable GPU: **AMD, Intel or NVIDIA**. The machine this was built
+  on is a hybrid Intel iGPU + NVIDIA RTX 4050 laptop, but nothing is
+  NVIDIA-specific: `install.sh` detects your cards and writes the right
+  environment (see [GPU support](#-gpu-support-amd--intel--nvidia)).
 - An **AUR helper** (`paru` or `yay`) for the `illogical-impulse-*` packages.
 - ~2 GB free disk space (the Quickshell build is the big part).
 
@@ -136,6 +138,59 @@ paru -S --needed hyprland hypridle hyprlock hyprsunset hyprpicker \
 > `illogical-impulse-quickshell-git` is the patched Quickshell build from the
 > end-4 AUR set. The fork **requires** it (it uses Hyprland global shortcuts
 > that stock `quickshell` does not expose the same way).
+
+---
+
+## GPU support (AMD / Intel / NVIDIA)
+
+The configuration is vendor-neutral. There is no `LIBVA_DRIVER_NAME=nvidia`,
+`GBM_BACKEND=nvidia-drm` or hard-coded `AQ_DRM_DEVICES` anywhere in the repo.
+Those were what made an earlier version fail on AMD: on an AMD card they point
+at a device that does not exist and force the NVIDIA GBM backend, so Hyprland
+either refuses to start or renders a black screen.
+
+Instead `~/bin/gpu-env` reads `/sys/class/drm`, works out which card drives
+your panel and writes the matching block into `~/.config/hypr/custom/env.lua`.
+`install.sh` runs it automatically:
+
+```bash
+~/bin/gpu-env            # what did it find?
+~/bin/gpu-env --write    # (re)generate the block after a GPU/driver change
+```
+
+| Hardware detected | What `env.lua` gets |
+|---|---|
+| **AMD only** | nothing — Mesa picks `amdgpu` / `radeonsi`; `LIBVA_DRIVER_NAME=radeonsi` only when `libva-mesa-driver` is installed |
+| **Intel only** | `LIBVA_DRIVER_NAME=iHD` (`i965` on very old iGPUs) |
+| **NVIDIA only** | `NVD_BACKEND=direct`; `LIBVA_DRIVER_NAME=nvidia` only when `nvidia-vaapi-driver` is installed |
+| **Hybrid (iGPU + dGPU)** | `AQ_DRM_DEVICES=/dev/dri/<card that drives the internal panel>` plus the lines above |
+
+```bash
+~/bin/gpu-env                     # this laptop: 2 GPUs detected
+#   card0  0x10de NVIDIA  nvidia
+#   card1  0x8086 Intel   i915  (primary) [internal panel]
+#   -> AQ_DRM_DEVICES=/dev/dri/card1, LIBVA_DRIVER_NAME=iHD, NVD_BACKEND=direct
+```
+
+Drivers and packages:
+
+| Vendor | Packages |
+|---|---|
+| **AMD** | `mesa libva-mesa-driver vulkan-radeon` (+ `lib32-mesa lib32-vulkan-radeon` for 32-bit) |
+| **Intel** | `mesa intel-media-driver vulkan-intel` |
+| **NVIDIA** | `nvidia-open` or `nvidia`, `nvidia-utils`; optional `nvidia-vaapi-driver` for VAAPI in browsers/mpv |
+
+Aquamarine (Hyprland's backend) supports all three. On a hybrid laptop the
+compositor is pointed at the panel's GPU and the dGPU stays free for games and
+rendering.
+
+> Remove NVIDIA exports (`LIBVA_DRIVER_NAME=nvidia`, `GBM_BACKEND=nvidia-drm`,
+> `__GLX_VENDOR_LIBRARY_NAME=nvidia`) from `~/.bashrc`, `~/.profile` and
+> `/etc/environment` before switching to an AMD card. `env.lua` can regenerate
+> the variables for apps, but a stale `GBM_BACKEND` in the session environment
+> is still read by the compositor at start-up.
+
+---
 
 ---
 
@@ -173,18 +228,20 @@ The script will:
 
 1. back up anything it is about to replace (to `~/.config-backup-<timestamp>`),
 2. copy `config/hypr` → `~/.config/hypr`,
-3. copy the shell `config.json` → `~/.config/illogical-impulse/config.json`,
-4. install `local/bin/*` → `~/bin` and the fish PATH snippet,
-5. install and enable the **live-wallpaper watchdog**
+3. **detect the GPUs** (AMD / Intel / NVIDIA) and write the matching
+   environment into `~/.config/hypr/custom/env.lua` with `gpu-env`,
+4. copy the shell `config.json` → `~/.config/illogical-impulse/config.json`,
+5. install `local/bin/*` → `~/bin` and the fish PATH snippet,
+6. install and enable the **live-wallpaper watchdog**
    (`live-wallpaper-watchdog.timer` — restarts `mpvpaper` within 30 s if the
    video wallpaper ever dies),
-6. copy all wallpapers → `~/Pictures/Wallpapers` and create the
+7. copy all wallpapers → `~/Pictures/Wallpapers` and create the
    `~/Wallpapers` symlink,
-7. install the avatar as `~/.config/quickshell/avatar/avatar.png` and `~/.face`,
-8. clone **end4-pC** to `~/.config/quickshell/end4-pC` and apply
+8. install the avatar as `~/.config/quickshell/avatar/avatar.png` and `~/.face`,
+9. clone **end4-pC** to `~/.config/quickshell/end4-pC` and apply
    `docs/end4-pC-local.patch` (the local widget/cheatsheet/on-screen-keyboard
    fixes),
-9. point `qsConfig` at `end4-pC` and restart the shell.
+10. point `qsConfig` at `end4-pC` and restart the shell.
 
 Then log out and back in once. That's it.
 
@@ -200,15 +257,16 @@ git -C ~/.config/quickshell/end4-pC apply ~/path/to/docs/end4-pC-local.patch
 cp -a config/hypr ~/.config/hypr
 cp config/illogical-impulse/config.json ~/.config/illogical-impulse/config.json
 
-# 3. wallpapers + avatar
+# 3. GPU environment for *this* machine (AMD / Intel / NVIDIA)
+cp local/bin/* ~/bin/ && chmod +x ~/bin/*
+~/bin/gpu-env --write
+
+# 4. wallpapers + avatar
 mkdir -p ~/Pictures/Wallpapers
 cp wallpapers/* ~/Pictures/Wallpapers/
 ln -sfn ~/Pictures/Wallpapers ~/Wallpapers
 cp avatar/avatar.png ~/.config/quickshell/avatar/avatar.png
 cp avatar/face.jpg ~/.face
-
-# 4. helpers
-cp local/bin/* ~/bin/ && chmod +x ~/bin/*
 
 # 5. live-wallpaper watchdog (systemd user units)
 mkdir -p ~/.config/systemd/user
@@ -229,8 +287,8 @@ automatically; if you copy manually, run:
 
 ```bash
 sed -i "s|/home/dreamseeker|$HOME|g" \
-  ~/.config/illogical-impulse/config.json \
-  ~/.config/hypr/custom/env.lua
+  ~/.config/illogical-impulse/config.json
+~/bin/gpu-env --write      # env.lua is generated from your hardware
 ```
 
 ---
@@ -319,8 +377,8 @@ The current theme is **Tokyo Night**, applied at
 │   │   └── config.json          # shell settings (bar, widgets, dock, theme…)
 │   ├── systemd/user/            # live-wallpaper-watchdog.service + .timer
 │   └── fish/conf.d/             # PATH snippet for ~/bin + ~/.local/bin
-├── local/bin/                   # refresh-wallpapers, set-avatar, unstick-keys,
-│                                # ensure-live-wallpaper (watchdog)
+├── local/bin/                   # gpu-env, ensure-live-wallpaper (watchdog),
+│                                # refresh-wallpapers, set-avatar, unstick-keys
 ├── wallpapers/                  # 19 wallpapers + 1 live 4K video
 ├── avatar/                      # avatar.png + face.jpg
 ├── docs/
@@ -359,7 +417,11 @@ The current theme is **Tokyo Night**, applied at
 | `pkill` killed my terminal while switching wallpapers | old script used `pkill -f mpvpaper`; the patched script uses `pkill -x mpvpaper` |
 | Stale wallpaper thumbnails | `~/bin/refresh-wallpapers` |
 | Everything types in CAPS | `Scroll_Lock` (releases stuck virtual modifiers) |
-| Blurry/oversized UI on a hybrid GPU | edit `config/hypr/custom/env.lua` (`AQ_DRM_DEVICES`, `NVD_BACKEND`) |
+| Blurry/oversized UI on a hybrid GPU | `~/bin/gpu-env --write`, then log out and back in |
+| **AMD: black screen, or Hyprland will not start** | a stale `GBM_BACKEND=nvidia-drm` / `LIBVA_DRIVER_NAME=nvidia` is still in the session environment. Remove it from `~/.bashrc`, `~/.profile` and `/etc/environment`, delete `~/.config/hypr/hyprland.conf` if it is an old copy, then run `~/bin/gpu-env --write` |
+| **AMD: video wallpaper stutters** | install `libva-mesa-driver` (and `mesa`); `mpvpaper` uses `hwdec=auto` → VAAPI. Check with `vainfo` |
+| **Wrong GPU is used on a hybrid laptop** | `~/bin/gpu-env --write` writes `AQ_DRM_DEVICES` for the card with the internal panel; `hyprctl systeminfo` shows what Hyprland picked. `AQ_DRM_DEVICES` is only read at start-up, so log out and back in |
+| Switched from NVIDIA to AMD | the repo no longer ships `hyprland.conf` (it had NVIDIA envs and fixed `eDP-1`/`HDMI-A-1` monitors); remove any leftover copy in `~/.config/hypr/` |
 | `SUPER+<key>` also opens search | fixed by the `input.keyboard.key` handler in `custom/keybinds.lua` |
 
 More detail — logs, GPU setup, portals, locale, memory tuning — is in the docx.

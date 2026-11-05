@@ -71,6 +71,18 @@ backup_path "$HOME/.config/hypr"
 cp -a "$REPO_DIR/config/hypr" "$HOME/.config/hypr"
 while IFS= read -r -d '' f; do rewrite_home "$f"; done < <(find "$HOME/.config/hypr" -type f -print0)
 
+# The old config shipped NVIDIA-only variables (LIBVA_DRIVER_NAME=nvidia,
+# GBM_BACKEND=nvidia-drm, AQ_DRM_DEVICES=card0:card1). On AMD/Intel that breaks
+# starting. gpu-env detects the cards on this machine and writes the matching
+# block into custom/env.lua.
+echo "==> GPU detection"
+if [[ -x "$REPO_DIR/local/bin/gpu-env" ]]; then
+    "$REPO_DIR/local/bin/gpu-env" --write "$HOME/.config/hypr/custom/env.lua" \
+        || echo "  GPU detection failed - set the variables by hand in ~/.config/hypr/custom/env.lua"
+else
+    echo "  local/bin/gpu-env missing, skipping (Hyprland defaults are used)"
+fi
+
 echo "==> Shell config (illogical-impulse/config.json)"
 mkdir -p "$HOME/.config/illogical-impulse"
 if [[ -f "$HOME/.config/illogical-impulse/config.json" ]]; then

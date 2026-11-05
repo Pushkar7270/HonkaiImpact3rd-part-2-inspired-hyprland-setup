@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+#
+# gpu-env — detect the GPUs in this machine and write the Hyprland environment
+# that matches them.
+#
+# The setup used to ship hard-coded NVIDIA variables (LIBVA_DRIVER_NAME=nvidia,
+# GBM_BACKEND=nvidia-drm, __GLX_VENDOR_LIBRARY_NAME=nvidia) and a hard-coded
+# AQ_DRM_DEVICES. On an AMD (or Intel) card those either point at a device that
+# does not exist or force Mesa to load an NVIDIA backend, so Hyprland fails to
+# start at best and renders a black screen at worst.
+#
+# This script reads /sys/class/drm, works out which card drives the panel and
+# writes only the variables that hardware actually needs into
+# ~/.config/hypr/custom/env.lua between the "gpu-env" markers.
+#
+# Usage:
+#   gpu-env                 show what was detected (no changes)
+#   gpu-env --write         update ~/.config/hypr/custom/env.lua
+#   gpu-env --write FILE    update FILE instead
+#
+# Run it again after changing a GPU or a driver, then log out and back in
+# (Hyprland only reads AQ_DRM_DEVICES at start-up).
+set -u
+
+SYSFS="${GPU_ENV_SYSFS:-/sys/class/drm}"
+DRI_DIR="${GPU_ENV_DRI_DIR:-/usr/lib/dri}"
+ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/custom/env.lua"
+BEGIN_MARKER="-- >>> gpu-env >>>"
+END_MARKER="-- <<< gpu-env <<<"
+
+WRITE=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --write) WRITE=1; shift
+                 [ $# -gt 0 ] && ENV_FILE="$1" && shift ;;
+        -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "gpu-env: unknown option $1" >&2; exit 2 ;;
+    esac
+done
+
+vendor_name() {
+    case "$1" in
+        0x10de) echo "NVIDIA" ;;
+        0x1002) echo "AMD" ;;
+        0x8086) echo "Intel" ;;
+        0x13b5) echo "ARM" ;;
+        0x5143) echo "Qualcomm" ;;
+        0x1ae0) echo "Google" ;;
+        *)      echo "unknown ($1)" ;;
+    esac
+}
+
+# Driver name that libva needs for this vendor, if it is installed.
+libva_driver() {
+    case "$1" in
+        0x8086) [ -e "$DRI_DIR/iHD_drv_video.so" ] && { echo iHD; return; }
+                [ -e "$DRI_DIR/i965_drv_video.so" ] && echo i965 ;;
+        0x1002) [ -e "$DRI_DIR/radeonsi_drv_video.so" ] && echo radeonsi ;;
+        0x10de) [ -e "$DRI_DIR/nvidia_drv_video.so" ] && echo nvidia ;;
+    esac
+}
+
+# card, vendor, driver, internal?, connected outputs
+cards=()
+for cardpath in "$SYSFS"/card[0-9]*; do
+    [ -d "$cardpath/device" ] || continue
+    card="$(basename "$cardpath")"
+    vendor="$(cat "$cardpath/device/vendor" 2>/dev/null)" || continue
+    [ -n "$vendor" ] || continue
+
+    driver=""
+    if [ -e "$cardpath/device/driver" ]; then
+        driver="$(basename "$(readlink -f "$cardpath/device/driver" 2>/dev/null)")"
+    fi
+    # xe/i915, amdgpu, nvidia/nouveau — trust the driver over the vendor id.
+    case "$driver" in
+        amdgpu)  vendor="0x1002" ;;
+        i915|xe) vendor="0x8086" ;;
+        nvidia|nouveau) vendor="0x10de" ;;
+    esac
+
+    internal=0
+    connected=0
+    outputs=""
+    for conn in "$SYSFS/$card"-*/; do
+        [ -f "$conn/status" ] || continue
+        [ "$(cat "$conn/status" 2>/dev/null)" = connected ] || continue
+        connected=1
+        name="$(basename "$conn")"
+        name="${name#"$card"-}"
+        outputs="${outputs:+$outputs, }$name"
+        case "$name" in
+            eDP*|LVDS*|DSI*|MIPI*) internal=1 ;;
+        esac
+    done
+
+    cards+=("$card|$vendor|$driver|$internal|$connected|$outputs")
+done
+
+if [ ${#cards[@]} -eq 0 ]; then
+    echo "gpu-env: no DRM cards found under $SYSFS" >&2
+    echo "gpu-env: are you running this on Linux with /sys/class/drm mounted?" >&2
+    exit 1
+fi
+
+# The compositor GPU: the one with the internal panel, else the one with any
+# connected output, else the first card.
+primary_card=""
+primary_vendor=""
+primary_outputs=""
+for entry in "${cards[@]}"; do
+    IFS='|' read -r card vendor driver internal connected outputs <<<"$entry"
+    if [ "$internal" = 1 ]; then primary_card="$card"; primary_vendor="$vendor"; primary_outputs="$outputs"; break; fi
+done
+if [ -z "$primary_card" ]; then
+    for entry in "${cards[@]}"; do
+        IFS='|' read -r card vendor driver internal connected outputs <<<"$entry"
+        if [ "$connected" = 1 ]; then primary_card="$card"; primary_vendor="$vendor"; primary_outputs="$outputs"; break; fi
+    done
+fi
+if [ -z "$primary_card" ]; then
+    IFS='|' read -r primary_card primary_vendor _ _ _ primary_outputs <<<"${cards[0]}"
+fi
+
+has_nvidia=0
+for entry in "${cards[@]}"; do
+    IFS='|' read -r _ vendor _ _ _ _ <<<"$entry"
+    [ "$vendor" = 0x10de ] && has_nvidia=1
+done
+
+# --- build the env lines ----------------------------------------------------
+lines=()
+notes=()
+
+if [ ${#cards[@]} -gt 1 ]; then
+    # Multi-GPU: tell aquamarine which card drives the panel. On hybrid laptops
+    # this keeps the video memory / panel on the iGPU when the dGPU only renders.
+    lines+=("\"AQ_DRM_DEVICES\", \"/dev/dri/$primary_card\"")
+    notes+=("multi-GPU: compositor uses /dev/dri/$primary_card")
+else
+    notes+=("single GPU: Hyprland and Mesa choose it themselves")
+fi
+
+if [ "$has_nvidia" = 1 ]; then
+    # Harmless on the proprietary driver, required by some setups for GBM.
+    lines+=("\"NVD_BACKEND\", \"direct\"")
+fi
+
+va="$(libva_driver "$primary_vendor")"
+if [ -n "$va" ]; then
+    lines+=("\"LIBVA_DRIVER_NAME\", \"$va\"")
+    notes+=("VAAPI decode on the ${primary_card} (${va})")
+else
+    case "$primary_vendor" in
+        0x1002) notes+=("AMD: Mesa picks the VAAPI driver itself (radeonsi)") ;;
+        0x10de) notes+=("NVIDIA: no nvidia-vaapi-driver installed; mpv uses NVDEC") ;;
+        0x8086) notes+=("Intel: install intel-media-driver for VAAPI (iHD)") ;;
+    esac
+fi
+
+# --- report -----------------------------------------------------------------
+echo "gpu-env: ${#cards[@]} GPU(s) detected"
+for entry in "${cards[@]}"; do
+    IFS='|' read -r card vendor driver internal connected outputs <<<"$entry"
+    role=""
+    [ "$card" = "$primary_card" ] && role=" (primary)"
+    [ "$internal" = 1 ] && role="$role [internal panel]"
+    printf '  %-6s %-6s %-12s %-8s%s\n' "$card" "$vendor" "$(vendor_name "$vendor")" "${driver:-no-driver}" "$role"
+done
+echo
+echo "env lines for $ENV_FILE"
+if [ ${#lines[@]} -eq 0 ]; then
+    echo "  (none needed — the defaults are correct)"
+else
+    for line in "${lines[@]}"; do
+        echo "  hl.env($line)"
+    done
+fi
+for note in "${notes[@]}"; do echo "  note: $note"; done
+
+# Warn about a VAAPI driver left over from another machine/session.
+current_libva="${LIBVA_DRIVER_NAME:-}"
+if [ -n "$current_libva" ] && [ -n "$va" ] && [ "$current_libva" != "$va" ]; then
+    echo
+    echo "gpu-env: warning: LIBVA_DRIVER_NAME is already set to \"$current_libva\" in this"
+    echo "  session but this GPU needs \"$va\". Remove the export from your shell"
+    echo "  profile / /etc/environment, then log out and back in."
+elif [ -n "$current_libva" ]; then
+    echo
+    echo "gpu-env: note: LIBVA_DRIVER_NAME=$current_libva is set in this session; env.lua"
+    echo "  only overrides it for apps started by Hyprland."
+fi
+
+# Leftover legacy config from the NVIDIA-only era.
+LEGACY_CONF="$(dirname "$(dirname "$ENV_FILE")")/hyprland.conf"
+if [ -f "$LEGACY_CONF" ]; then
+    echo
+    echo "gpu-env: warning: $LEGACY_CONF still exists."
+    echo "  Hyprland 0.57 reads hyprland.lua; the old .conf holds NVIDIA env vars and"
+    echo "  fixed monitor names. Remove it unless you deliberately use it."
+fi
+
+[ "$WRITE" = 1 ] || exit 0
+
+# --- write the marked block ------------------------------------------------
+block_file="$(mktemp)"
+{
+    echo "-- Detected:"
+    for entry in "${cards[@]}"; do
+        IFS='|' read -r card vendor driver internal connected outputs <<<"$entry"
+        printf -- '--   %s %s %s%s%s\n' "$card" "$(vendor_name "$vendor")" \
+            "${driver:-}" "${outputs:+ ($outputs)}" "$([ "$card" = "$primary_card" ] && echo ' [primary]')"
+    done
+    echo "-- Generated by ~/bin/gpu-env; run it again after changing hardware."
+    for line in "${lines[@]}"; do
+        printf 'hl.env(%s)\n' "$line"
+    done
+} >"$block_file"
+
+mkdir -p "$(dirname "$ENV_FILE")"
+if [ ! -f "$ENV_FILE" ]; then
+    {
+        echo "-- Local tweaks for this machine"
+        echo
+        echo "$BEGIN_MARKER"
+        cat "$block_file"
+        echo "$END_MARKER"
+    } >"$ENV_FILE"
+elif grep -qF -e "$BEGIN_MARKER" "$ENV_FILE"; then
+    tmp="$(mktemp)"
+    awk -v b="$BEGIN_MARKER" -v e="$END_MARKER" -v bf="$block_file" '
+        $0 == b { print b; while ((getline l < bf) > 0) print l; close(bf); print e; skip = 1; next }
+        $0 == e { skip = 0; next }
+        !skip   { print }
+    ' "$ENV_FILE" >"$tmp" && mv "$tmp" "$ENV_FILE"
+else
+    {
+        echo
+        echo "$BEGIN_MARKER"
+        cat "$block_file"
+        echo "$END_MARKER"
+    } >>"$ENV_FILE"
+fi
+rm -f "$block_file"
+
+echo
+echo "gpu-env: wrote $ENV_FILE"
+echo "gpu-env: log out and back in so Hyprland re-reads it."

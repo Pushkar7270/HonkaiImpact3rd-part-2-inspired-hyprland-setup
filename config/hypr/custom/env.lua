@@ -1,12 +1,24 @@
--- Local tweaks for this machine (laptop: Intel iGPU + NVIDIA RTX 4050, hybrid)
--- The internal panel is driven by the Intel GPU (eDP is connected to card1),
--- so point Hyprland/aquamarine at it and keep the NVIDIA card for apps only.
-hl.env("AQ_DRM_DEVICES", "/dev/dri/card1")
-hl.env("NVD_BACKEND", "direct")
-hl.env("LIBVA_DRIVER_NAME", "iHD")
+-- Machine-specific tweaks.
+--
+-- The GPU environment is generated from *your* hardware by ~/bin/gpu-env and
+-- install.sh runs it for you. Never hard-code NVIDIA / AMD / Intel values in
+-- this file: on another card they point at a device that does not exist or
+-- force the wrong GBM/VAAPI backend, and Hyprland fails to start or renders a
+-- black screen.
+--
+--   ~/bin/gpu-env --write     -- detect again and rewrite the block below
+--   log out and back in       -- Hyprland reads AQ_DRM_DEVICES at start-up
+--
+-- On a single-GPU machine the block stays empty: Hyprland and Mesa pick the
+-- only card themselves. On a hybrid laptop it points the compositor at the
+-- GPU that drives the internal panel.
+-- >>> gpu-env >>>
+-- (empty - run: ~/bin/gpu-env --write)
+-- <<< gpu-env <<<
 
 -- "en_IN" (without the .UTF-8 suffix) has no XKB compose file -> every GUI
 -- app printed "xkbcommon: No Compose file for locale en_IN" warnings.
+-- Replace both with your own locale if you are not in India.
 hl.env("LANG", "en_IN.UTF-8")
 hl.env("LC_ALL", "en_IN.UTF-8")
 
